@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Things Google Knows About Me</title>
+
+<style>
+/* google logo */
+  :root {
+    --ink: #202124;      /* main text */
+    --muted: #5f6368;    /* grey text */
+    --line: #dfe1e5;     /* thin borders */
+    --soft: #f8f9fa;     /* light grey boxes */
+    --blue: #4285f4; --red: #ea4335; --yellow: #fbbc05; --green: #34a853;
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: Arial, Helvetica, sans-serif; color: var(--ink); background: #fff; }
+  main { max-width: 680px; margin: 0 auto; padding: 12vh 20px 80px; }
+  main.on-results { padding-top: 24px; }  
+
+  .logo { text-align: center; font-weight: 500; letter-spacing: -1px; font-size: clamp(34px, 8vw, 56px); margin: 0 0 6px; }
+  .logo-small { font-size: 20px; letter-spacing: -.5px; border: 0; background: none; padding: 0; cursor: pointer; }
+  .logo span:nth-child(5n+1), .logo span:nth-child(5n+4) { color: var(--blue); }
+  .logo span:nth-child(5n+2) { color: var(--red); }
+  .logo span:nth-child(5n+3) { color: var(--yellow); }
+  .logo span:nth-child(5n+5) { color: var(--green); }
+  .sub { text-align: center; color: var(--muted); margin: 0 0 28px; font-size: 15px; }
+
+
+  .wrap { position: relative; }  
+  .bar { display: flex; align-items: center; border: 1px solid var(--line); border-radius: 28px; padding: 4px 8px 4px 18px; }
+  .bar:focus-within { box-shadow: 0 1px 6px rgba(32,33,36,.28); border-color: transparent; }
+  .bar input { flex: 1; border: 0; outline: 0; font-size: 16px; padding: 12px 8px; background: transparent; }
+  .bar button { border: 0; background: none; font-size: 18px; cursor: pointer; padding: 8px 10px; }
+  .suggestions { position: absolute; left: 0; right: 0; top: calc(100% + 6px); background: #fff; border-radius: 16px; box-shadow: 0 4px 12px rgba(32,33,36,.28); padding: 6px 0; z-index: 5; display: none; }
+  .suggestions button { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 10px 20px; font-size: 15px; color: var(--ink); cursor: pointer; }
+  .suggestions button:hover, .suggestions button.active { background: var(--soft); }
+
+/* home */
+  .buttons { display: flex; gap: 10px; justify-content: center; margin: 22px 0 8px; flex-wrap: wrap; }
+  .buttons button { background: var(--soft); border: 1px solid var(--soft); border-radius: 4px; padding: 10px 16px; font-size: 14px; color: var(--ink); cursor: pointer; }
+  .buttons button:hover { border-color: var(--line); }
+
+/* results */
+  #results { display: none; }  
+  .topbar { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; margin-bottom: 24px; }
+  .topbar .wrap { flex: 1; min-width: 240px; }
+  .card { border: 1px solid var(--line); border-radius: 12px; padding: 20px; }
+  .card h2 { font-size: 22px; font-weight: 400; color: #1a0dab; margin: 0 0 14px; }
+  .columns { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 560px) { .columns { grid-template-columns: 1fr; } }  
+  .box { background: var(--soft); border-radius: 8px; padding: 12px 14px; font-size: 14px; line-height: 1.5; }
+  .box b { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  .reaction { margin: 14px 0 0; font-size: 15px; font-style: italic; }
+  .help { margin-top: 16px; font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .help button { border: 1px solid var(--line); background: #fff; border-radius: 14px; padding: 4px 12px; cursor: pointer; font-size: 13px; }
+  .reply { width: 100%; color: var(--ink); }
+  .empty { text-align: center; color: var(--muted); }
+  .empty h3 { color: var(--ink); font-size: 18px; font-weight: 500; }
+
+</style>
+</head>
+
+<body>
+<main id="main">
+
+<!-- home page -->
+  <section id="home">
+    <h1 class="logo" id="logo"></h1>
+    <p class="sub">One month of questions I needed answered. Start typing.</p>
+
+    <div class="wrap">
+      <div class="bar">
+        <input id="input" type="text" placeholder="Search my search history" autocomplete="off">
+        <button id="goBtn" aria-label="Search">&#128269;</button>
+      </div>
+      <div class="suggestions" id="suggestions"></div>
+    </div>
+
+    <div class="buttons">
+      <button id="searchBtn">Search</button>
+      <button id="randomBtn">I'm feeling curious</button>
+    </div>
+  </section>
+
+<!-- results page -->
+  <section id="results">
+    <div class="topbar">
+      <button class="logo logo-small" id="logoSmall" aria-label="Back to home"></button>
+      <div class="wrap">
+        <div class="bar">
+          <input id="input2" type="text" placeholder="Search my search history" autocomplete="off">
+          <button id="goBtn2" aria-label="Search">&#128269;</button>
+        </div>
+        <div class="suggestions" id="suggestions2"></div>
+      </div>
+    </div>
+    <!-- answer card -->
+    <div id="result"></div>  
+
+  </section>
+
+</main>
+
+<script>
+
+// data
+
+// shows up in the "no results" message
+const NAME = "me";
+
+
+//   q   = whats searched
+//   a   = what Google helped with
+//   r   = reaction
+//   kw  = extra words that should match this search (helps the search bar find it)
+//   yes = reply 
+//   no  = reply
+const searches = [
+  { q: "scientology device",
+    a: "It's called an E-meter (electropsychometer). It measures tiny changes in skin electrical resistance and is used in Scientology's \"auditing\" sessions.",
+    yes: "Great.",
+    no: "Fair." },
+
+  { q: "toeing the line meaning",
+    a: "To toe the line means to follow the rules or do what's expected. It's often said to come from lining up your toes on a marked line.",
+    yes: "I will now toe the line.",
+    no: "Understandable." },
+
+  { q: "wall e people",
+    a: "They're the humans aboard the Axiom, the starliner in WALL-E. After centuries in space they rely on hover chairs and screens for everything.",
+    kw: "wall e walle people humans movie pixar axiom",
+    yes: "Wonderful. I'm now thinking about the hover chairs.",
+    no: "They're the people in the chairs. That's the answer. Sorry." },
+
+  { q: "how long to keep towel on hair",
+    a: "About 10 to 20 minutes is plenty. That absorbs the extra water without tugging on wet, fragile hair.",
+    r: "Years of towels. First time asking for instructions.",
+    kw: "towel hair wrap wet shower",
+    yes: "Great. The towel and I have an understanding.",
+    no: "ok." },
+
+  { q: "what to do if finger burns",
+    a: "Run it under cool (not ice-cold) water for 10 to 20 minutes, then cover loosely. Skip butter and ice. See a doctor if it blisters badly or looks white or charred.",
+    kw: "finger burn burned burns cooking hurt first aid emergency",
+    yes: "Finger is fine.",
+    no: "skip Google and call a doctor." },
+
+  { q: "where to store canned fish",
+    a: "Unopened cans go in a cool, dry pantry. Once opened, move the fish to an airtight container in the fridge and eat within 3 to 4 days.",
+    r: "Fish is in a cabinet. Nothing has improved.",
+    kw: "canned fish tuna sardines store storage pantry can",
+    yes: "Yes. The fish has a home now.",
+    no: "No problem. The fish is not going anywhere." },
+
+  { q: "bacon jam",
+    a: "A savory-sweet spread made by cooking bacon down with onion, brown sugar, vinegar and usually coffee until it turns sticky and jammy.",
+    r: "Exists.",
+    kw: "bacon jam spread food",
+    yes: "Bacon, but make it jam. Done.",
+    no: "It's what it sounds like. I can't make it simpler." },
+
+  { q: "whip and nae nae lyrics",
+    a: "You already know who it is Silento, Silento Silento Go on and do it for me",
+    kw: "whip nae nae lyrics song silento dance watch me",
+    yes: "Glad to help. Go dance.",
+    no: "title already tells you the moves." },
+
+  { q: "can you see a profile if you unmatch on hinge",
+    a: "Unmatching removes the match and the chat for both people, and the app generally stops showing you to each other.",
+    r: "Asked for a friend.",
+    kw: "hinge unmatch profile dating app match",
+    yes: "Great. They are gone. Moving on.",
+    no: "Cry about it." },
+
+  { q: "can i wash towels and clothes together",
+    a: "You can, but it's better not to. Towels shed lint and need longer, hotter washes. They also dry slower than clothes.",
+    r: "Did it anyway.",
+    kw: "wash towels clothes laundry together washing machine lint",
+    yes: "Separate loads. Got it.",
+    no: "It's a lot." },
+
+  { q: "how long between meals",
+    a: "For most adults, about 3 to 5 hours between meals is typical. It varies with hunger, activity and schedule.",
+    kw: "meals long between eat eating hungry fasting snack time",
+    yes: "Great.",
+    no: "Your body knows its own schedule." },
+
+  { q: "why let food sit after cooking",
+    a: "Juices redistribute and settle, the food finishes cooking from residual heat, and it cools just enough that you won't burn your mouth.",
+    kw: "food sit rest resting after cooking wait steak meat",
+    yes: "Nom",
+    no: "Just let it rest." },
+
+  { q: "how much caffeine will i get from blank street matcha",
+    a: "Matcha usually has roughly 60 to 90 mg of caffeine per standard cup, but it depends on size and scoops. Check the cafe's official number.",
+    kw: "caffeine blank street matcha coffee tea latte drink",
+    yes: "Nom.",
+    no: "Fair. Only the cafe knows its real number." },
+
+  { q: "scientific word for poop",
+    a: "Feces (or faeces). The act itself is called defecation, and doctors often say \"stool.\"",
+    kw: "scientific word poop feces stool bathroom science",
+    yes: "Feces. Noted.",
+    no: "Try \"stool\" or \"defecation.\" Very elegant." },
+
+  { q: "itchy tattoo when washing",
+    a: "Itching is a normal part of healing. Wash gently with lukewarm water and mild soap, pat dry, moisturize lightly, and don't scratch.",
+    kw: "itchy tattoo washing healing skin ink scratch",
+    yes: "Itch survived. So did the tattoo.",
+    no: "Ask your tattoo artist." },
+
+  { q: "who created canes sauce",
+    a: "Raising Cane's was founded by Todd Graves in Baton Rouge in 1996. The sauce recipe is a closely guarded secret.",
+    kw: "canes cane's sauce raising chicken created fast food",
+    yes: "Todd Graves. A man of the people.",
+    no: "It's a secret." },
+
+  { q: "chow mein",
+    a: "A Chinese stir-fried noodle dish with vegetables and often meat or tofu. The name roughly means \"fried noodles.\"",
+    kw: "chow mein noodles chinese food dinner",
+    yes: "Noodles. Good.",
+    no: "It's noodles." },
+
+  { q: "bunna b and pluto",
+    a: "Fire rappers that have beef",
+    kw: "bunnab pluto bunnab and pluto ",
+    yes: "Lululemon.",
+    no: "Lululemon" }
+];
+
+// setup
+
+const $ = id => document.getElementById(id);
+function paintLogo(element) {
+  "Things Google Knows About Me".split("").forEach(letter => {
+    const span = document.createElement("span");
+    span.textContent = letter === " " ? "\u00A0" : letter; 
+    element.appendChild(span);
+  });
+}
+paintLogo($("logo"));
+paintLogo($("logoSmall"));
+
+// matches
+
+// search matches if it, or its keywords, contain any of the typed words.
+function findMatches(text) {
+  const words = text.toLowerCase().split(/\W+/).filter(w => w.length > 1);
+  if (words.length === 0) return [];
+
+  return searches
+    .map((s, index) => {
+      const haystack = (s.q + " " + s.kw).toLowerCase();
+      let score = words.filter(w => haystack.includes(w)).length;
+      if (s.q.toLowerCase().startsWith(text.toLowerCase())) score += 2;
+      return { index, score };
+    })
+    .filter(m => m.score > 0)               // drop non-matches
+    .sort((a, b) => b.score - a.score)      // best match first
+    .slice(0, 5)                            // at most 5 suggestions
+    .map(m => m.index);
+}
+
+// pages (using URL "#" part so the Back button works)
+
+
+function goToResult(index) { location.hash = "#/result/" + index; }
+function goToNoResult(text) { location.hash = "#/none/" + encodeURIComponent(text); }
+function goHome() { location.hash = "#/"; }
+
+// shows either home page or results page
+function showPage() {
+  const parts = location.hash.split("/");   // "#/result/3" -> ["#", "result", "3"]
+  const onResults = parts[1] === "result" || parts[1] === "none";
+
+  
+  $("home").style.display = onResults ? "none" : "block";
+  $("results").style.display = onResults ? "block" : "none";
+  $("main").classList.toggle("on-results", onResults);
+  window.scrollTo(0, 0);
+
+  if (parts[1] === "result" && searches[parts[2]]) {
+    showResult(Number(parts[2]));
+  } else if (parts[1] === "none") {
+    showNoResult(decodeURIComponent(parts[2] || ""));
+  } else {
+    $("input").value = "";   
+  }
+}
+window.addEventListener("hashchange", showPage);  
+function showResult(index) {
+  const s = searches[index];
+  $("input2").value = s.q;
+
+  $("result").innerHTML = `
+    <article class="card">
+      <h2>${s.q}</h2>
+      <div class="columns">
+        <div class="box"><b>What I wanted to know</b>${s.q}</div>
+        <div class="box"><b>What Google helped me know</b>${s.a}</div>
+      </div>
+      <p class="reaction">${s.r}</p>
+      <div class="help">
+        <span>Did this help?</span>
+        <button data-answer="yes">Yes</button>
+        <button data-answer="no">No</button>
+        <span class="reply" id="reply"></span>
+      </div>
+    </article>`;
+
+  // clicking yes/no shows reply
+  document.querySelectorAll(".help button").forEach(button => {
+    button.onclick = () => { $("reply").textContent = s[button.dataset.answer]; };
+  });
+
+}
+
+// when nothing matches whats typed
+function showNoResult(text) {
+  $("input2").value = text;
+  $("result").innerHTML = `
+    <div class="empty">
+      <h3></h3>
+      <p>${NAME} has never wondered about this.</p>
+    </div>`;
+  $("result").querySelector("h3").textContent = `No results for "${text}"`; 
+
+  }
+// search bar
+
+// both search bars work the same way
+function setupSearchBar(input, suggestionBox, goButton) {
+  function closeSuggestions() { suggestionBox.style.display = "none"; }
+
+  // runs when enter/search pressed
+  function submit() {
+    const text = input.value.trim();
+    if (!text) return;
+    closeSuggestions();
+    const matches = findMatches(text);
+    if (matches.length > 0) goToResult(matches[0]);  // go to best match
+    else goToNoResult(text);                          // "no results" page
+  }
+
+  // rebuild the suggestion dropdown
+  input.addEventListener("input", () => {
+    const matches = findMatches(input.value);
+    suggestionBox.innerHTML = "";                     
+
+    matches.forEach(index => {
+      const button = document.createElement("button");
+      button.textContent = searches[index].q;
+      button.onmousedown = event => { event.preventDefault(); closeSuggestions(); goToResult(index); };
+      suggestionBox.appendChild(button);
+    });
+
+    suggestionBox.style.display = matches.length ? "block" : "none";
+  });
+
+  input.addEventListener("keydown", event => {
+    if (event.key === "Enter") submit();
+    if (event.key === "Escape") closeSuggestions();
+  });
+  input.addEventListener("blur", () => setTimeout(closeSuggestions, 150)); // hide when clicking away
+  goButton.onclick = submit;
+
+  return submit;
+}
+
+const submitHome = setupSearchBar($("input"), $("suggestions"), $("goBtn"));
+setupSearchBar($("input2"), $("suggestions2"), $("goBtn2"));
+
+
+// "search" button does the same thing as pressing enter
+$("searchBtn").onclick = submitHome;
+
+// "im feeling curious" jump to a random search
+$("randomBtn").onclick = () => {
+  const current = location.hash.startsWith("#/result/") ? Number(location.hash.split("/")[2]) : -1;
+  let pick;
+  do { pick = Math.floor(Math.random() * searches.length); } while (pick === current);
+  goToResult(pick);
+};
+
+$("logoSmall").onclick = goHome;
+showPage();
+</script>
+</body>
+</html>
